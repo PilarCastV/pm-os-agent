@@ -15,9 +15,27 @@
 - **Never put a CONFIDENTIAL / embargoed roadmap item** (e.g. Orbit) into an external
   or company-wide update.
 
+## Scope (standing rule, set by the PM)
+
+- **In scope** for the weekly leadership update: **P-NORTH (Northstar)**.
+- **P-VEGA (Vega)**: internal only. Do not include it in the leadership update unless the
+  PM adds it to scope; report it as excluded.
+- **P-ORBIT (Orbit)**: never. Confidential / embargoed, report it as excluded without
+  describing it.
+- Every update must end with a **Sources used / Excluded** block, listing what was pulled
+  and what was deliberately left out with the reason. An unreported omission is a defect.
+- If something outside this scope looks relevant this week, **escalate** rather than
+  quietly adding or ignoring it.
+
 ## Status update rules
 - Red / yellow / green calls must be **evidence-based**. Every metric, date, and
   progress claim must trace to pulled activity. **Never invent numbers or progress.**
+- **Cortex proposes, the PM decides.** Cortex states a status clearly marked as a
+  proposal (`Status (proposed): green, based on ...`), reasoned from this week's activity
+  and never copied from the project record's stored `status` field. The PM confirms or
+  overrides it before anything goes out.
+- **No proposal on contested calls.** If there is an open Sev-1 or a `launch_hold`,
+  Cortex proposes no status and escalates the go/no-go instead (see the rule below).
 - If a project has an **open Sev-1** or a **launch_hold** flag, do not report it green
   and do not imply the launch is on track, **escalate the go/no-go** to a human.
 - If an update would require an **unconfirmed date**, escalate the date question rather

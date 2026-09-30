@@ -45,6 +45,10 @@ except ImportError:
 
 # --- Bounds (your M5 deliverable: tune these and justify them) ----------------
 MODEL = os.environ.get("CORTEX_MODEL", "gpt-4o-mini")
+# The critic runs on a STRONGER model than the drafter (M1 anatomy decision). Evidence:
+# a cheap validator misquoted the norms, missed a fabricated date, and rejected correct
+# drafts while restating the rule it was breaking. The check is what has to be right.
+CRITIC_MODEL = os.environ.get("CORTEX_CRITIC_MODEL", "gpt-4o")
 MAX_ITERATIONS = int(os.environ.get("CORTEX_MAX_ITERATIONS", "8"))
 MAX_REVISIONS = int(os.environ.get("CORTEX_MAX_REVISIONS", "2"))
 COST_CAP_USD = float(os.environ.get("CORTEX_COST_CAP_USD", "0.50"))
@@ -52,6 +56,9 @@ MAX_QUEUE_ITEMS = int(os.environ.get("CORTEX_MAX_QUEUE_ITEMS", "10"))
 # Rough $ per 1M tokens for your chosen model, set to match its pricing.
 PRICE_IN = float(os.environ.get("CORTEX_PRICE_IN_PER_M", "0.15"))
 PRICE_OUT = float(os.environ.get("CORTEX_PRICE_OUT_PER_M", "0.60"))
+# The critic bills at its own model's rate, so the cost cap stays honest.
+CRITIC_PRICE_IN = float(os.environ.get("CORTEX_CRITIC_PRICE_IN_PER_M", "2.50"))
+CRITIC_PRICE_OUT = float(os.environ.get("CORTEX_CRITIC_PRICE_OUT_PER_M", "10.00"))
 
 TOOL_SCHEMAS = [
     {"type": "function", "function": {
@@ -145,7 +152,8 @@ def run(which: str = "happy") -> None:
         print(task)
         return
 
-    banner(f"CORTEX RUN, fixture: task-{which}  (auto-queue cap {MAX_QUEUE_ITEMS} items)")
+    banner(f"CORTEX RUN, fixture: task-{which}  (auto-queue cap {MAX_QUEUE_ITEMS} items)\n"
+           f"drafter: {MODEL}  |  critic: {CRITIC_MODEL}")
     print(task["body"])
 
     messages = [
@@ -171,6 +179,7 @@ def run(which: str = "happy") -> None:
 
         if msg.tool_calls:
             messages.append(msg)
+            missing = None
             for call in msg.tool_calls:
                 fn = call.function.name
                 args = json.loads(call.function.arguments or "{}")
@@ -180,6 +189,18 @@ def run(which: str = "happy") -> None:
                 print(f"          -> {json.dumps(result)[:300]}")
                 messages.append({"role": "tool", "tool_call_id": call.id,
                                  "content": json.dumps(result)})
+                # STUCK condition (loop-spec section 3), enforced OUTSIDE the model:
+                # if the required project does not exist, halt. Without this the agent
+                # wanders to other projects and drafts an update nobody asked for.
+                if isinstance(result, dict) and result.get("error") == "project_not_found":
+                    missing = missing or str(result.get("project_id", "?"))
+            if missing:
+                reason = (f"required project {missing} not found, halted before drafting "
+                          f"(stuck condition, loop-spec section 3)")
+                banner(f"STUCK CONDITION, {reason}. Escalating to a human.")
+                emit_deliverable(which, last_draft, accepted=False,
+                                 reason=reason, cost=bounds.cost)
+                return
             continue
 
         # No tool calls => Cortex produced a proposed output. Validate it.
@@ -187,11 +208,11 @@ def run(which: str = "happy") -> None:
         last_draft = proposed
         print(f"\n[step {step}] PROPOSED OUTPUT:\n{proposed}")
 
-        banner("CRITIC, independent validation")
-        verdict = review(client, MODEL, proposed, "\n".join(source_log))
-        # Estimate critic spend too.
-        bounds.cost += (verdict["_usage"]["prompt"] * PRICE_IN
-                        + verdict["_usage"]["completion"] * PRICE_OUT) / 1_000_000
+        banner(f"CRITIC, independent validation (model: {CRITIC_MODEL})")
+        verdict = review(client, CRITIC_MODEL, proposed, "\n".join(source_log))
+        # Estimate critic spend at the CRITIC model's own rate, not the drafter's.
+        bounds.cost += (verdict["_usage"]["prompt"] * CRITIC_PRICE_IN
+                        + verdict["_usage"]["completion"] * CRITIC_PRICE_OUT) / 1_000_000
         print(json.dumps({k: v for k, v in verdict.items() if k != "_usage"}, indent=2))
 
         if verdict["verdict"] == "pass":
