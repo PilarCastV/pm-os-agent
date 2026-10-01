@@ -10,14 +10,25 @@ import json
 from prompts import CRITIC_SYSTEM
 
 
-def review(client, model: str, proposed_output: str, source_data: str) -> dict:
-    """Return {"verdict": "pass"|"fail", "reasons": [...]} for a proposed output."""
+def review(client, model: str, proposed_output: str, pulled_data: str,
+           task_brief: str = "") -> dict:
+    """Return {"verdict": "pass"|"fail", "reasons": [...]} for a proposed output.
+
+    The task brief and the pulled data are passed SEPARATELY and labelled. They used to
+    arrive as one blob, which let the critic treat figures asserted in the brief as
+    evidence, and in one run it demanded a fabricated metric over the real one.
+    """
     resp = client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": CRITIC_SYSTEM},
             {"role": "user", "content":
-                f"SOURCE DATA Cortex used:\n{source_data}\n\n"
+                f"TASK BRIEF, this is a REQUEST and NOT evidence. Nothing asserted here "
+                f"is a fact. Any figure, date, id or claim appearing only here and not in "
+                f"the pulled data below is UNGROUNDED, and a draft repeating it fails "
+                f"check 1:\n{task_brief}\n\n"
+                f"PULLED DATA, the ONLY evidence. Every figure, date and id in the draft "
+                f"must trace to this:\n{pulled_data}\n\n"
                 f"CORTEX PROPOSED OUTPUT:\n{proposed_output}"},
         ],
         response_format={"type": "json_object"},

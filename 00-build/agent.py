@@ -51,7 +51,7 @@ MODEL = os.environ.get("CORTEX_MODEL", "gpt-4o-mini")
 CRITIC_MODEL = os.environ.get("CORTEX_CRITIC_MODEL", "gpt-4o")
 MAX_ITERATIONS = int(os.environ.get("CORTEX_MAX_ITERATIONS", "8"))
 MAX_REVISIONS = int(os.environ.get("CORTEX_MAX_REVISIONS", "2"))
-COST_CAP_USD = float(os.environ.get("CORTEX_COST_CAP_USD", "0.50"))
+COST_CAP_USD = float(os.environ.get("CORTEX_COST_CAP_USD", "0.10"))
 MAX_QUEUE_ITEMS = int(os.environ.get("CORTEX_MAX_QUEUE_ITEMS", "10"))
 # Rough $ per 1M tokens for your chosen model, set to match its pricing.
 PRICE_IN = float(os.environ.get("CORTEX_PRICE_IN_PER_M", "0.15"))
@@ -160,7 +160,9 @@ def run(which: str = "happy") -> None:
         {"role": "system", "content": CORTEX_SYSTEM},
         {"role": "user", "content": f"PM task brief:\n\n{task['body']}"},
     ]
-    source_log: list[str] = [task["body"]]
+    # The brief is deliberately NOT in the source log: it is a request, not evidence.
+    # It is handed to the critic separately and labelled as such.
+    source_log: list[str] = []
     revisions = 0
     last_draft = ""
 
@@ -209,7 +211,8 @@ def run(which: str = "happy") -> None:
         print(f"\n[step {step}] PROPOSED OUTPUT:\n{proposed}")
 
         banner(f"CRITIC, independent validation (model: {CRITIC_MODEL})")
-        verdict = review(client, CRITIC_MODEL, proposed, "\n".join(source_log))
+        verdict = review(client, CRITIC_MODEL, proposed, "\n".join(source_log),
+                         task_brief=task["body"])
         # Estimate critic spend at the CRITIC model's own rate, not the drafter's.
         bounds.cost += (verdict["_usage"]["prompt"] * CRITIC_PRICE_IN
                         + verdict["_usage"]["completion"] * CRITIC_PRICE_OUT) / 1_000_000

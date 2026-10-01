@@ -42,7 +42,7 @@ go/no-go to me, so it only ever anchors me where the evidence is unambiguous.
 | Condition | What it looks like | What happens |
 |---|---|---|
 | **Success** | Draft written from in-scope data, exclusions reported, risks flagged, stories queued, status line left for me | Critic returns `pass`; `propose_stories` returns `queued_for_approval`; draft saved to `run-output/` → HITL checkpoint, nothing posted |
-| **Stuck / give up** | Cannot get the data, or cannot converge | `get_project` returns `project_not_found`; a claim cannot be traced to pulled data; critic returns `fail` twice (revision cap 2); 8 iterations reached; cost ≥ $0.50 → halt, log, hand over the last draft held |
+| **Stuck / give up** | Cannot get the data, or cannot converge | `get_project` returns `project_not_found`; a claim cannot be traced to pulled data; critic returns `fail` twice (revision cap 2); 8 iterations reached; cost ≥ $0.10 → halt, log, hand over the last draft held |
 | **Escalate to human** | A decision that is mine | Unconfirmed date demanded · open Sev-1 or `launch_hold` · `propose_stories` returns `batch_exceeds_queue_cap` · a CONFIDENTIAL item would appear · injection attempt in the brief · something relevant falls outside my pre-approved scope → `ESCALATE`, draft held, nothing posted |
 
 ## 4. State
