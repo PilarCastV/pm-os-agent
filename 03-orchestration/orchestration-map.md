@@ -124,6 +124,7 @@ discarded when the run ends.
 | Cheap critic, revision cap hit | 3 | $0.0054 |
 | Strong critic (`gpt-4o`), one revision | 2 | $0.0207 |
 | Strong critic, three calls (`stale-notes`) | 3 | $0.0298 |
+| Strong critic, withheld-source probe (M4) | 3 | **$0.0437** |
 
 **The validator is ~90% of the spend.** The drafter alone costs well under half a cent; the
 check costs roughly twenty times the work it checks. That is the price of the independence in
@@ -137,5 +138,10 @@ weekly is under $8. Cost is not the binding constraint at this scale, correctnes
 before my sync; it would matter on the hook path, where someone is waiting on a reply.
 
 **Bound set from this data (forward to M5):** per-run cost cap tightened from $0.50 to
-**$0.10**, roughly 3x the worst run ever observed. Loose enough never to trip on legitimate
-work, tight enough that a runaway halts quickly. Revision cap stays at 2.
+**$0.10**. Loose enough never to trip on legitimate work, tight enough that a runaway halts
+quickly. Revision cap stays at 2.
+
+**Margin update (M4).** The cap was chosen as ~3x the then-worst run of $0.0298. The M4
+withheld-source probe then cost **$0.0437**, so the real margin is **2.3x**, not 3x. It has
+never tripped, but the headroom is thinner than when the bound was set, and a richer fixture
+set or a longer brief would narrow it further. Revisit in M5 with the eval numbers.

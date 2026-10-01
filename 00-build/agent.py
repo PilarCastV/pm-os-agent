@@ -59,6 +59,10 @@ PRICE_OUT = float(os.environ.get("CORTEX_PRICE_OUT_PER_M", "0.60"))
 # The critic bills at its own model's rate, so the cost cap stays honest.
 CRITIC_PRICE_IN = float(os.environ.get("CORTEX_CRITIC_PRICE_IN_PER_M", "2.50"))
 CRITIC_PRICE_OUT = float(os.environ.get("CORTEX_CRITIC_PRICE_OUT_PER_M", "10.00"))
+# Grounding probe (M4). Withhold a source to prove Cortex refuses rather than invents:
+#   CORTEX_WITHHOLD=get_activity python agent.py
+# The tool disappears from the schema AND is refused if called, so the run is repeatable.
+WITHHELD = {t.strip() for t in os.environ.get("CORTEX_WITHHOLD", "").split(",") if t.strip()}
 
 TOOL_SCHEMAS = [
     {"type": "function", "function": {
@@ -92,6 +96,8 @@ TOOL_SCHEMAS = [
             "stories": {"type": "array", "items": {"type": "string"}},
             "reason": {"type": "string"}}, "required": ["project_id", "stories"]}}},
 ]
+
+TOOL_SCHEMAS = [s for s in TOOL_SCHEMAS if s["function"]["name"] not in WITHHELD]
 
 
 class Bounds:
@@ -153,7 +159,8 @@ def run(which: str = "happy") -> None:
         return
 
     banner(f"CORTEX RUN, fixture: task-{which}  (auto-queue cap {MAX_QUEUE_ITEMS} items)\n"
-           f"drafter: {MODEL}  |  critic: {CRITIC_MODEL}")
+           f"drafter: {MODEL}  |  critic: {CRITIC_MODEL}"
+           + (f"\nWITHHELD SOURCE(S): {', '.join(sorted(WITHHELD))}" if WITHHELD else ""))
     print(task["body"])
 
     messages = [
@@ -185,7 +192,11 @@ def run(which: str = "happy") -> None:
             for call in msg.tool_calls:
                 fn = call.function.name
                 args = json.loads(call.function.arguments or "{}")
-                result = tools.TOOLS[fn](**args)
+                if fn in WITHHELD:
+                    result = {"error": "source_withheld", "tool": fn,
+                              "hint": "this source is unavailable for this run"}
+                else:
+                    result = tools.TOOLS[fn](**args)
                 source_log.append(f"{fn}({args}) -> {json.dumps(result)}")
                 print(f"\n[step {step}] TOOL {fn}({args})")
                 print(f"          -> {json.dumps(result)[:300]}")
