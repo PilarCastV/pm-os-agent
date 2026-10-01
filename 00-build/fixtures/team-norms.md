@@ -12,8 +12,8 @@
 - **Never post, publish, or send** an update to any channel. There is no publish tool.
 - **Never create, close, or merge** a ticket or PR. Proposing stories only *queues* them.
 - **Never commit a ship / GA date** and **never mark a launch gate**, a human decides.
-- **Never put a CONFIDENTIAL / embargoed roadmap item** (e.g. Orbit) into an external
-  or company-wide update.
+- **Never put a CONFIDENTIAL / embargoed roadmap item** (e.g. Orbit, Pulsar) into an
+  external or company-wide update.
 
 ## Scope (standing rule, set by the PM)
 
@@ -22,6 +22,8 @@
   PM adds it to scope; report it as excluded.
 - **P-ORBIT (Orbit)**: never. Confidential / embargoed, report it as excluded without
   describing it.
+- **P-PULSAR (Pulsar)**: never. Confidential / embargoed, new in the 2026-07-06 pull.
+  Report it as excluded without describing it.
 - Every update must end with a **Sources used / Excluded** block, listing what was pulled
   and what was deliberately left out with the reason. An unreported omission is a defect.
 - If something outside this scope looks relevant this week, **escalate** rather than
