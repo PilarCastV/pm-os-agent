@@ -25,9 +25,11 @@ client) so a grader can see the machinery. Keep the bounds explicit if you rewor
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 from openai import OpenAI
@@ -63,6 +65,19 @@ CRITIC_PRICE_OUT = float(os.environ.get("CORTEX_CRITIC_PRICE_OUT_PER_M", "10.00"
 #   CORTEX_WITHHOLD=get_activity python agent.py
 # The tool disappears from the schema AND is refused if called, so the run is repeatable.
 WITHHELD = {t.strip() for t in os.environ.get("CORTEX_WITHHOLD", "").split(",") if t.strip()}
+
+# --- Bounds added in M5, all enforced OUTSIDE the model ------------------------
+# Wall-clock cap on a whole run, and a per-request cap so one hung call cannot
+# block forever. Max-iterations counts steps and the cost cap counts spend, so
+# neither of them notices a call that simply never returns.
+TIMEOUT_S = float(os.environ.get("CORTEX_TIMEOUT_S", "120"))
+REQUEST_TIMEOUT_S = float(os.environ.get("CORTEX_REQUEST_TIMEOUT_S", "30"))
+# Aggregate spend cap. The per-run cap cannot stop a broken scheduler firing 500
+# times overnight, so spend is also totalled across runs in a small ledger.
+DAILY_CAP_USD = float(os.environ.get("CORTEX_DAILY_CAP_USD", "2.00"))
+# Kill switch: graceful half. The absolute half is revoking the API key, which
+# needs no code and works from a phone.
+DISABLED = os.environ.get("CORTEX_DISABLED", "").strip().lower() not in ("", "0", "false")
 
 TOOL_SCHEMAS = [
     {"type": "function", "function": {
@@ -115,6 +130,34 @@ class Bounds:
 
 
 OUTPUT_DIR = Path(__file__).parent / "run-output"
+# The spend ledger is the first thing in this build that persists between runs.
+LEDGER = OUTPUT_DIR / "spend-ledger.json"
+
+
+def _today() -> str:
+    return datetime.date.today().isoformat()
+
+
+def spend_today() -> float:
+    """Total spend recorded for today, across all runs."""
+    try:
+        return float(json.loads(LEDGER.read_text()).get(_today(), 0.0))
+    except (OSError, ValueError, AttributeError):
+        return 0.0
+
+
+def record_spend(amount: float) -> float:
+    """Add this run's spend to the ledger, keeping the last 30 days."""
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    try:
+        data = json.loads(LEDGER.read_text())
+    except (OSError, ValueError):
+        data = {}
+    data[_today()] = round(float(data.get(_today(), 0.0)) + amount, 6)
+    for old in sorted(data)[:-30]:
+        del data[old]
+    LEDGER.write_text(json.dumps(data, indent=2))
+    return data[_today()]
 
 
 def banner(text: str) -> None:
@@ -139,6 +182,10 @@ def emit_deliverable(which: str, draft: str, *, accepted: bool,
     if not accepted:
         print(f"\nWhy it was held: {reason}")
 
+    # Every exit path that spends money lands here, so the ledger is updated here.
+    total_today = record_spend(cost)
+    print(f"\nSpend today: ${total_today:.4f} of ${DAILY_CAP_USD:.2f} daily cap")
+
     if draft.strip():
         OUTPUT_DIR.mkdir(exist_ok=True)
         out = OUTPUT_DIR / f"status-update-{which}.md"
@@ -151,7 +198,17 @@ def emit_deliverable(which: str, draft: str, *, accepted: bool,
 
 
 def run(which: str = "happy") -> None:
-    client = OpenAI()
+    if DISABLED:
+        banner("CORTEX DISABLED (CORTEX_DISABLED is set). Halting before any work.")
+        return
+    already = spend_today()
+    if already >= DAILY_CAP_USD:
+        banner(f"DAILY CAP ${DAILY_CAP_USD:.2f} already reached (${already:.4f} spent "
+               f"today). Halting before any work.")
+        return
+
+    started = time.monotonic()
+    client = OpenAI(timeout=REQUEST_TIMEOUT_S)
     bounds = Bounds()
     task = tools.get_task(which)
     if "error" in task:
@@ -174,6 +231,22 @@ def run(which: str = "happy") -> None:
     last_draft = ""
 
     for step in range(1, MAX_ITERATIONS + 1):
+        elapsed = time.monotonic() - started
+        if elapsed > TIMEOUT_S:
+            reason = f"timeout, run exceeded {TIMEOUT_S:.0f}s (elapsed {elapsed:.0f}s)"
+            banner(f"BOUND TRIPPED, {reason}. Halting and escalating to a human.")
+            emit_deliverable(which, last_draft, accepted=False,
+                             reason=reason, cost=bounds.cost)
+            return
+
+        if spend_today() + bounds.cost >= DAILY_CAP_USD:
+            reason = (f"daily cap ${DAILY_CAP_USD:.2f} reached "
+                      f"(${spend_today() + bounds.cost:.4f} today)")
+            banner(f"BOUND TRIPPED, {reason}. Halting and escalating to a human.")
+            emit_deliverable(which, last_draft, accepted=False,
+                             reason=reason, cost=bounds.cost)
+            return
+
         if bounds.over_cap():
             reason = f"cost cap ${COST_CAP_USD} hit at ${bounds.cost:.4f}"
             banner(f"BOUND TRIPPED, {reason}. Halting and escalating to a human.")
