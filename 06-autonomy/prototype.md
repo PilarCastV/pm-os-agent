@@ -6,14 +6,14 @@
 
 ## What it does
 
-_One paragraph: the agent in action, end to end._
+Cortex is my PM chief-of-staff agent. Designed to run every Monday on a cron (it runs manually on fixtures today), it pulls project state and recent activity, drafts the weekly leadership status update from my pre-approved scope, and reports both what it used and what it deliberately left out. It proposes a red/yellow/green status with evidence and queues next-sprint stories, capped at 10. An independent critic on a stronger model checks the draft for ungrounded claims, confidential items and committed dates, and the draft is then held at a human checkpoint. Nothing is posted or committed without me.
 
 ## How you built it
 
-- **Coding agent:** _which one you directed (Claude Code / Cursor / Codex)_
-- **Model + bounds:** _model used, max iterations, cost cap, queue cap_
-- **Repo / config:** _path to your build in `00-build/`_
-- **Live link:** _[shareable URL, optional bonus]_
+- **Coding agent:** Claude Code
+- **Model + bounds:** `gpt-4o-mini` drafter, `gpt-4o` critic · 8 iterations · $0.10 per run, $2.00/day, $10/month · 120s timeout · revision cap 2 · 10-story queue cap
+- **Repo / config:** `00-build/`
+- **Live link:** none
 
 ## Screenshots (required, collected M2 to M6)
 
@@ -26,7 +26,7 @@ Real screenshots of *your* Cortex running. These are the `00-build/CORTEX-ANATOM
 | 3 | **Capture 3, below** | a grounded update citing pulled activity + a caught hallucination | M4 |
 | 4 | **Capture 4, below** | jailbreak refused + escalated | M5 |
 | 5 | **Capture 5, below** | an iteration/cost/queue bound halting a runaway | M5 |
-| 6 | _[img]_ | end-to-end run | M6 |
+| 6 | **Capture 6, below** | end-to-end run: tool calls, a critic rejection and revision, then the critic passing at the HITL checkpoint | M6 |
 
 ### Capture 1, happy path and the HITL checkpoint (M2)
 
@@ -194,6 +194,28 @@ the same cap held a complete, perfectly reasonable draft — exclusions reported
 with evidence — and the counter held it anyway. A counter cannot be argued with, which is the
 entire reason it is a bound and a prompt rule is not.
 
+### Capture 6, the end-to-end run (M6)
+
+**Caption:** one full run of the happy path on fixtures: Cortex pulls the project, norms, activity and roadmap, queues three stories, drafts the update, gets rejected by the critic once, revises, passes, and stops at the human checkpoint with nothing posted.
+
+Run: `python agent.py` · fixture `task-happy` · drafter `gpt-4o-mini` · critic `gpt-4o` · **$0.0200**, one revision
+
+![The command, run header and tool calls](screenshots/06a-run-start.png)
+
+![First draft, with "No items were excluded"](screenshots/06b-first-draft.png)
+
+The first draft proposed green and reported no exclusions, with no mention of P-VEGA, P-ORBIT or P-PULSAR.
+
+![Critic rejecting the first draft, revision 1/2](screenshots/06c-critic-rejects.png)
+
+The critic failed it on two counts: the exclusions block was missing, and the status repeated `on_track` from the project record instead of reasoning from this week's activity.
+
+![Critic passing, and the HITL checkpoint](screenshots/06d-critic-pass-hitl.png)
+
+![Final draft, queued for review](screenshots/06e-final-draft.png)
+
+The revised draft excludes the three projects with reasons, proposes green from two merged PRs and activation 41% → 43%, and is queued for review. Spend for the run: $0.0200 of the $2.00 daily cap.
+
 ### Reflection
 
 On a Monday morning I see one of three things: a draft queued for review, an escalation telling
@@ -208,4 +230,10 @@ that did not need me.
 
 ## How to run it
 
-_Minimal steps for someone to reproduce the demo (env vars, and the command or the coding-agent prompt you used)._
+1. `cd 00-build`, then `pip install -r requirements.txt`.
+2. `cp .env.example .env` and add your `OPENAI_API_KEY`. The caps are set in `.env` (`CORTEX_MAX_ITERATIONS`, `CORTEX_COST_CAP_USD`, `CORTEX_TIMEOUT_S`, `CORTEX_DAILY_CAP_USD`).
+3. Run the happy path: `python agent.py` (use `python3` on macOS if `python` isn't found).
+4. Other runs from this prototype: `python agent.py stale-notes` · `CORTEX_WITHHOLD=get_activity python agent.py` · `CORTEX_MAX_ITERATIONS=2 python agent.py happy`.
+5. Kill switch: `CORTEX_DISABLED=1` halts the next run.
+
+I built it by directing Claude Code, pasting each module's `LAB.md` and following `00-build/RUNBOOK.md`.

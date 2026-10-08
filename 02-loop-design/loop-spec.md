@@ -18,6 +18,12 @@ the happy-path fixture models. **Heartbeat, ruled out:** nothing needs reacting 
 weekly cycles, so it would spend money to discover there is no news. **Goal, ruled out:**
 a human makes the final status call, so Cortex cannot validate its own finish.
 
+**Open decision, the exact hour.** "Monday morning, before my leadership sync" is settled; the
+specific time is not, because it depends on when that sync actually sits. Constraints for
+whoever schedules it: the run must complete before the sync (runs finish in well under two
+minutes, so an hour of margin is ample), and it should fire after the weekend's activity has
+landed. Set this when the cron is actually created, not before.
+
 **Dedupe / idempotency:** the artifact is identified by project + week. A second trigger for
 a week that already has a draft updates that draft rather than creating a second one, which
 covers both a hook firing twice and Monday's cron landing after a mid-week request.
